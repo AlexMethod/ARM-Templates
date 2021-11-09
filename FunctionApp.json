@@ -1,0 +1,124 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "type": "string",
+            "metadata": { "description": "Function App Name" }
+        },
+        "csmpPlanName": {
+            "type": "string",
+            "metadata": { "description": "Consumption Plan Name" }
+        },
+        "storageName": {
+            "type": "string",
+            "metadata": { "description": "Storage Account Name" }
+        },
+        "applicationInsightsName": {
+            "type": "string",
+            "metadata": { "description": "Application Insights Name" }
+        }
+    },
+    "functions": [],
+    "variables": {
+        "rgLocation": "[resourceGroup().location]"
+    },
+    "resources": [
+        {
+            "name": "[parameters('storageName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "tags": {
+                "displayName": "[parameters('storageName')]"
+            },
+            "location": "[variables('rgLocation')]",
+            "kind": "Storage",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            }
+        },
+        {
+            "name": "[parameters('csmpPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('rgLocation')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y",
+                "capacity": 0
+            },
+            "properties": {
+                "perSiteScaling": false,
+                "maximumElasticWorkerCount": 1,
+                "isSpot": false,
+                "reserved": false,
+                "isXenon": false,
+                "hyperV": false,
+                "targetWorkerCount": 0,
+                "targetWorkerSizeId": 0
+            }
+        },
+        {
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02-preview",
+            "name": "[parameters('applicationInsightsName')]",
+            "location": "[variables('rgLocation')]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', parameters('applicationInsightsName')))]": "Resource"
+            },
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "IngestionMode": "ApplicationInsights",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion" : "2020-12-01",
+            "name": "[parameters('functionAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', parameters('csmpPlanName'))]",
+                "[resourceId('microsoft.insights/components', parameters('applicationInsightsName'))]"
+            ],
+            "properties": {
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageName'), ';AccountKey=', listKeys(parameters('storageName'),'2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageName'), ';AccountKey=', listKeys(parameters('storageName'),'2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name" : "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value" : "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2014-04-01').InstrumentationKey]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "10.14.1"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
