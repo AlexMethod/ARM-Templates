@@ -1,0 +1,67 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "projectNames": {
+            "type": "array",
+            "metadata": { "description": "description" },
+            "defaultValue" : [
+                "ProjectName1",
+                "ProjectName2",
+                "ProjectName3"
+            ]
+        },
+        "environment": {
+            "type": "string",
+            "metadata": { "description": "The environment" },
+            "allowedValues": [ "dev", "prod" ],
+            "defaultValue": "dev"
+        }
+    },
+    "functions": [],
+    "variables": {
+        "rgLocation" : "[resourceGroup().location]",
+        "prefix" : "prefix",
+        "copy": [
+            {
+                "name" : "appInsightsNames",
+                "count" : "[length(parameters('projectNames'))]",
+                "input" : "[concat(variables('prefix'),parameters('projectNames')[copyIndex('appInsightsNames')],parameters('environment'))]"
+            }
+        ] 
+    },
+    "resources": [
+        {
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02-preview",
+            "name": "[variables('appInsightsNames')[copyIndex('appInsights')]]",
+            "location": "[variables('rgLocation')]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('appInsightsNames')[copyIndex('appInsights')]))]": "Resource"
+            },
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "IngestionMode": "ApplicationInsights",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            },
+            "copy" : {
+                "name" : "appInsights",
+                "count" : "[length(variables('appInsightsNames'))]"
+            }
+        }
+    ],
+    "outputs": {
+        "appInsightsKeys" : {
+            "type" : "array",
+            "copy" : {
+                "count" : "[length(variables('appInsightsNames'))]",
+                "input" : {
+                    "name" : "[variables('appInsightsNames')[copyIndex()]]",
+                    "value" : "[reference(resourceId('microsoft.insights/components', variables('appInsightsNames')[copyIndex()]), '2020-02-02-preview').InstrumentationKey]"
+                }
+            }
+        }
+    }
+}
